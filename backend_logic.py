@@ -6,7 +6,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.run_nables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough  # Fixed typo here
 from langchain_core.output_parsers import StrOutputParser
 
 class RAGBackend:
@@ -30,7 +30,6 @@ class RAGBackend:
         loader = PyPDFLoader(self.file_path)
         documents = loader.load()
         
-        # Balanced chunk size for performance and API quota
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
         chunks = text_splitter.split_documents(documents)
 
@@ -39,13 +38,9 @@ class RAGBackend:
             embedding=self.embeddings,
             persist_directory=self.persist_directory
         )
-        print(f"✅ Indexed into {self.persist_directory}")
 
     def get_response(self, query: str, chat_history: list):
-        """
-        Processes query using LCEL (LangChain Expression Language).
-        Bypasses 'langchain.chains' to ensure Python 3.14 compatibility.
-        """
+        """Processes query using LCEL for Python 3.14 compatibility."""
         if not self.vector_store:
             self.vector_store = Chroma(
                 persist_directory=self.persist_directory, 
@@ -54,10 +49,9 @@ class RAGBackend:
 
         retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
 
-        # --- 1. CONTEXTUALIZATION STEP ---
-        # Turns follow-up questions into standalone questions
+        # 1. Contextualization Chain
         context_prompt = ChatPromptTemplate.from_messages([
-            ("system", "Given chat history and a question, rephrase it as a standalone question. Do NOT answer it."),
+            ("system", "Given chat history and a question, rephrase it as a standalone question."),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ])
@@ -65,13 +59,13 @@ class RAGBackend:
         context_chain = context_prompt | self.llm | StrOutputParser()
         standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
 
-        # --- 2. RETRIEVAL STEP ---
+        # 2. Retrieval
         retrieved_docs = retriever.invoke(standalone_question)
         context_text = "\n\n".join([doc.page_content for doc in retrieved_docs])
         
-        # --- 3. ANSWER GENERATION STEP ---
+        # 3. QA Chain
         qa_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an AI assistant. Answer the question using ONLY the provided context:\n\n{context}"),
+            ("system", "Answer the question using ONLY the provided context:\n\n{context}"),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ])
@@ -84,7 +78,5 @@ class RAGBackend:
             "context": context_text
         })
 
-        # --- 4. CITATION EXTRACTION ---
         sources = [f"Page {doc.metadata.get('page', 0) + 1}" for doc in retrieved_docs]
-        
         return answer, list(set(sources))
