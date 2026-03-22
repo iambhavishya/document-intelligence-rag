@@ -13,25 +13,26 @@ from langchain_core.output_parsers import StrOutputParser
 class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
+        
+        # Ensure we pull the key again just in case
         api_key = st.secrets["GOOGLE_API_KEY"]
         
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
         
-        # Use the stable embedding model instead of preview
+        # 1. USE STABLE EMBEDDINGS (v1 is most compatible)
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001", # <--- Use this stable model
+            model="models/embedding-001", 
             google_api_key=api_key
         )
         
-        # Use the stable Flash model
+        # 2. USE STABLE LLM (Gemini 1.5 Flash is the industry standard)
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash", # <--- Use this stable model
+            model="gemini-1.5-flash", 
             temperature=0.3,
             google_api_key=api_key
         )
         self.vector_store = None
-
     def process_document(self):
         """Loads PDF, chunks text, and stores in a fresh ChromaDB."""
         if os.path.exists(self.persist_directory):
