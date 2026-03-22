@@ -8,9 +8,7 @@ from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-# Change these lines:
-from langchain.chains.history_aware_retriever import create_history_aware_retriever
-from langchain.chains.retrieval import create_retrieval_chain
+from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 
 class RAGBackend:
