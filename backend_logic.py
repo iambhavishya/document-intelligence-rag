@@ -13,20 +13,20 @@ from langchain_core.output_parsers import StrOutputParser
 class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
-        
-        # Get the API Key from Streamlit Secrets
         api_key = st.secrets["GOOGLE_API_KEY"]
         
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
         
-        # Explicitly pass the api_key to the models
+        # Use the stable embedding model instead of preview
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-2-preview",
+            model="models/embedding-001", # <--- Use this stable model
             google_api_key=api_key
         )
+        
+        # Use the stable Flash model
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-3-flash-preview", 
+            model="gemini-1.5-flash", # <--- Use this stable model
             temperature=0.3,
             google_api_key=api_key
         )
