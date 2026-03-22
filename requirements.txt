@@ -1,7 +1,7 @@
-streamlit
-langchain
-langchain-community
+langchain>=0.3.0
+langchain-community>=0.3.0
 langchain-google-genai
 langchain-chroma
 pypdf
+streamlit
 pydantic
