@@ -13,13 +13,22 @@ class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
         
-        # Unique ID prevents "database locked" errors in Streamlit
+        # Get the API Key from Streamlit Secrets
+        api_key = st.secrets["GOOGLE_API_KEY"]
+        
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
         
-        # 2026 Stable Models
-        self.embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-2-preview")
-        self.llm = ChatGoogleGenerativeAI(model="gemini-3-flash-preview", temperature=0.3)
+        # Explicitly pass the api_key to the models
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/gemini-embedding-2-preview",
+            google_api_key=api_key
+        )
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-3-flash-preview", 
+            temperature=0.3,
+            google_api_key=api_key
+        )
         self.vector_store = None
 
     def process_document(self):
