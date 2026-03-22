@@ -6,17 +6,14 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_chroma import Chroma
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.run_nables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
-from langchain.chains.history_aware_retriever import create_history_aware_retriever
-from langchain.chains.retrieval import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 
 class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
         
-        # Unique ID prevents "tenant" and "database locked" errors
+        # Unique ID prevents "database locked" errors in Streamlit
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
         
@@ -33,8 +30,8 @@ class RAGBackend:
         loader = PyPDFLoader(self.file_path)
         documents = loader.load()
         
-        # Increased chunk size to avoid API Quota (429) errors
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=3000, chunk_overlap=300)
+        # Balanced chunk size for performance and API quota
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
         chunks = text_splitter.split_documents(documents)
 
         self.vector_store = Chroma.from_documents(
@@ -42,10 +39,13 @@ class RAGBackend:
             embedding=self.embeddings,
             persist_directory=self.persist_directory
         )
-        print(f"✅ Success: Indexed into {self.persist_directory}")
+        print(f"✅ Indexed into {self.persist_directory}")
 
     def get_response(self, query: str, chat_history: list):
-        """Processes query with conversation history and returns (answer, sources)."""
+        """
+        Processes query using LCEL (LangChain Expression Language).
+        Bypasses 'langchain.chains' to ensure Python 3.14 compatibility.
+        """
         if not self.vector_store:
             self.vector_store = Chroma(
                 persist_directory=self.persist_directory, 
@@ -54,51 +54,37 @@ class RAGBackend:
 
         retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
 
-        # 1. CONTEXTUALIZE QUESTION: 
-        # Reformulates the user's question to be standalone based on chat history.
-        contextualize_q_system_prompt = (
-            "Given a chat history and the latest user question "
-            "which might reference context in the chat history, "
-            "formulate a standalone question which can be understood "
-            "without the chat history. Do NOT answer the question."
-        )
-        contextualize_q_prompt = ChatPromptTemplate.from_messages([
-            ("system", contextualize_q_system_prompt),
+        # --- 1. CONTEXTUALIZATION STEP ---
+        # Turns follow-up questions into standalone questions
+        context_prompt = ChatPromptTemplate.from_messages([
+            ("system", "Given chat history and a question, rephrase it as a standalone question. Do NOT answer it."),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ])
         
-        history_aware_retriever = create_history_aware_retriever(
-            self.llm, retriever, contextualize_q_prompt
-        )
+        context_chain = context_prompt | self.llm | StrOutputParser()
+        standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
 
-        # 2. ANSWER QUESTION:
-        # Generates the final answer using retrieved context and history.
-        system_prompt = (
-            "You are an expert assistant. Use the following pieces of retrieved "
-            "context to answer the question. If you don't know the answer, say so."
-            "\n\n"
-            "{context}"
-        )
+        # --- 2. RETRIEVAL STEP ---
+        retrieved_docs = retriever.invoke(standalone_question)
+        context_text = "\n\n".join([doc.page_content for doc in retrieved_docs])
+        
+        # --- 3. ANSWER GENERATION STEP ---
         qa_prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
+            ("system", "You are an AI assistant. Answer the question using ONLY the provided context:\n\n{context}"),
             MessagesPlaceholder("chat_history"),
             ("human", "{input}"),
         ])
-
-        question_answer_chain = create_stuff_documents_chain(self.llm, qa_prompt)
         
-        # Final Retrieval Chain
-        rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
-
-        # 3. EXECUTE
-        result = rag_chain.invoke({"input": query, "chat_history": chat_history})
+        qa_chain = qa_prompt | self.llm | StrOutputParser()
         
-        # 4. EXTRACT SOURCES (Page Numbers)
-        sources = []
-        for doc in result["context"]:
-            # PDF pages are 0-indexed in metadata, so we add 1
-            page_num = doc.metadata.get("page", 0) + 1
-            sources.append(f"Page {page_num}")
-            
-        return result["answer"], list(set(sources))
+        answer = qa_chain.invoke({
+            "input": standalone_question, 
+            "chat_history": chat_history, 
+            "context": context_text
+        })
+
+        # --- 4. CITATION EXTRACTION ---
+        sources = [f"Page {doc.metadata.get('page', 0) + 1}" for doc in retrieved_docs]
+        
+        return answer, list(set(sources))
