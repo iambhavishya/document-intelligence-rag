@@ -36,7 +36,7 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if "sources" in message:
+        if "sources" in message and message["sources"]:
             st.caption(f"📍 Sources: {', '.join(message['sources'])}")
 
 # 5. Chat Input Logic
@@ -44,7 +44,7 @@ if prompt := st.chat_input("Ask about the document..."):
     if "rag" not in st.session_state:
         st.error("Please upload and index a document first!")
     else:
-        # Add User Message to UI
+        # Add User Message to UI State
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -53,9 +53,11 @@ if prompt := st.chat_input("Ask about the document..."):
         with st.chat_message("assistant"):
             with st.spinner("Searching document..."):
                 # Pass message history to backend for conversational memory
-                # We extract only the text for the LangChain history placeholder
                 history_buffer = []
-                for m in st.session_state.messages:
+                
+                # FIX: Loop through all messages EXCEPT the last one (the current prompt)
+                # This prevents sending the same question as both history and input.
+                for m in st.session_state.messages[:-1]:
                     if m["role"] == "user":
                         history_buffer.append(("human", m["content"]))
                     else:
