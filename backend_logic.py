@@ -20,7 +20,7 @@ class RAGBackend:
         self.persist_directory = f"./chroma_db_{unique_id}"
         
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model="models/embedding-001",
             task_type="retrieval_document" 
         )
         self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
