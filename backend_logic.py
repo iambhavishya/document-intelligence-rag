@@ -17,6 +17,14 @@ class RAGBackend:
         
         # 1. Set the API key globally to avoid validation errors
         os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+
+        # --- 🚨 TEMPORARY DEBUG BLOCK 🚨 ---
+        import google.generativeai as genai
+        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+        valid_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        st.error(f"✅ YOUR VALID CHAT MODELS ARE: {valid_models}")
+        st.stop() # This halts the app so you can read the list
+        # -----------------------------------
         
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
