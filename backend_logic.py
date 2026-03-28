@@ -36,21 +36,31 @@ class RAGBackend:
         )
         self.vector_store = None
     def process_document(self):
-        """Loads PDF, chunks text, and stores in a fresh ChromaDB."""
+        """Loads PDF and chunks text with a safety-first batching approach."""
         if os.path.exists(self.persist_directory):
             shutil.rmtree(self.persist_directory)
 
         loader = PyPDFLoader(self.file_path)
         documents = loader.load()
         
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=200)
+        # Reduced chunk size to keep the API payload small
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         chunks = text_splitter.split_documents(documents)
 
-        self.vector_store = Chroma.from_documents(
-            documents=chunks,
-            embedding=self.embeddings,
+        # Initialize Chroma empty first
+        self.vector_store = Chroma(
+            embedding_function=self.embeddings,
             persist_directory=self.persist_directory
         )
+
+        # Process in SMALL BATCHES (e.g., 5 chunks at a time) 
+        # to avoid Google API 'Internal Error' or 'Quota Exceeded'
+        batch_size = 5
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            self.vector_store.add_documents(batch)
+            
+        print(f"✅ Successfully indexed {len(chunks)} chunks in batches.")
 
     def get_response(self, query: str, chat_history: list):
         """Processes query using LCEL for Python 3.14 compatibility."""
