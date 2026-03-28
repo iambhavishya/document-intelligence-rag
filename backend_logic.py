@@ -15,36 +15,22 @@ class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
         
-        # 1. Set the API key globally to avoid validation errors
+        # 1. Set the API key globally
         os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-
-        # --- 🚨 NEW DEPENDENCY-FREE DEBUG BLOCK 🚨 ---
-        import requests
-        api_key = st.secrets["GOOGLE_API_KEY"]
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-        response = requests.get(url).json()
-        
-        if 'models' in response:
-            valid_models = [m['name'] for m in response['models'] if 'generateContent' in m.get('supportedGenerationMethods', [])]
-            st.error(f"✅ YOUR VALID CHAT MODELS ARE: {valid_models}")
-        else:
-            st.error(f"🚨 API ERROR: {response}")
-        st.stop() # Halts the app so you can read the list
-        # ---------------------------------------------
         
         unique_id = str(uuid.uuid4())[:8]
-        # ... (rest of your init code stays the same)
         self.persist_directory = f"./chroma_db_{unique_id}"
         
-        # 2. Use the standard 2026 text-embedding model
+        # 2. The Correct 2026 Embedding Model
         self.embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001", 
             task_type="retrieval_document" 
         )
         
-        self.llm = ChatGoogleGenerativeAI(model="gemini-3-flash", temperature=0.3)
+        # 3. The Correct Chat Model (Direct from your debug list!)
+        self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.3)
+        
         self.vector_store = None
-
     def process_document(self):
         try:
             if os.path.exists(self.persist_directory):
