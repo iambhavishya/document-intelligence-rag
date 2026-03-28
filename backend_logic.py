@@ -23,7 +23,7 @@ class RAGBackend:
         
         # 2. Use the standard 2026 text-embedding model
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004", 
+            model="models/gemini-embedding-001", 
             task_type="retrieval_document" 
         )
         
