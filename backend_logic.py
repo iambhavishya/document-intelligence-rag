@@ -14,19 +14,21 @@ class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
         
-        # Ensure we pull the key again just in case
+        # Pull key from secrets
         api_key = st.secrets["GOOGLE_API_KEY"]
         
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
         
-        # 1. USE STABLE EMBEDDINGS (v1 is most compatible)
+        # 1. Use STABLE Embeddings with explicit task_type
+        # 'retrieval_document' is required by Google for indexing RAG data
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001", 
-            google_api_key=api_key
+            model="models/text-embedding-004", # Latest stable 2026 version
+            google_api_key=api_key,
+            task_type="retrieval_document" 
         )
         
-        # 2. USE STABLE LLM (Gemini 1.5 Flash is the industry standard)
+        # 2. Use STABLE LLM
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
             temperature=0.3,
