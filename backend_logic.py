@@ -79,15 +79,24 @@ class RAGBackend:
 
             retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
 
-            # --- Contextualization Step ---
-            context_prompt = ChatPromptTemplate.from_messages([
-                ("system", "Given chat history and a question, rephrase it as a standalone question. Do NOT answer it."),
-                MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
-            ])
-            
-            context_chain = context_prompt | self.llm | StrOutputParser()
-            standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
+            # --- THE FIX: Smart Contextualization ---
+            # Only ask the LLM to rephrase if there is actually a history to look at.
+            if chat_history:
+                context_prompt = ChatPromptTemplate.from_messages([
+                    ("system", "Given chat history and a question, rephrase it as a standalone question. Do NOT answer it."),
+                    MessagesPlaceholder("chat_history"),
+                    ("human", "{input}"),
+                ])
+                
+                context_chain = context_prompt | self.llm | StrOutputParser()
+                standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
+                
+                # Safety fallback: if Gemini returns an empty string anyway, use the original query
+                if not standalone_question.strip():
+                    standalone_question = query
+            else:
+                # First question! No history needed to rephrase.
+                standalone_question = query
 
             # --- Retrieval Step ---
             retrieved_docs = retriever.invoke(standalone_question)
@@ -114,6 +123,5 @@ class RAGBackend:
             return answer, list(set(sources))
 
         except Exception as e:
-            # THIS WILL PRINT THE EXACT REASON GOOGLE REJECTED THE CHAT
             st.error(f"🚨 GOOGLE CHAT API ERROR DETAILS: {str(e)}")
             raise e
