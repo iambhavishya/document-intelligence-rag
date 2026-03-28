@@ -23,8 +23,7 @@ class RAGBackend:
         
         # 2. The Correct 2026 Embedding Model
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001", 
-            task_type="retrieval_document" 
+            model="models/gemini-embedding-001"
         )
         
         # 3. The Correct Chat Model (Direct from your debug list!)
