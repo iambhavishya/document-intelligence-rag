@@ -125,3 +125,54 @@ class RAGBackend:
         except Exception as e:
             st.error(f"🚨 GOOGLE CHAT API ERROR DETAILS: {str(e)}")
             raise e
+def get_response(self, query: str, chat_history: list):
+        """Processes the user query and retrieves answers from the PDF."""
+        try:
+            if not self.vector_store:
+                self.vector_store = Chroma(
+                    persist_directory=self.persist_directory, 
+                    embedding_function=self.embeddings
+                )
+
+            retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
+
+            if chat_history:
+                context_prompt = ChatPromptTemplate.from_messages([
+                    ("system", "Given chat history and the latest question, rephrase it as a short standalone question. Do NOT answer it."),
+                    MessagesPlaceholder("chat_history"),
+                    ("human", "{input}"),
+                ])
+                
+                context_chain = context_prompt | self.llm | StrOutputParser()
+                standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
+                
+                # THE FIX: Fallback if the LLM hallucinates a massive string or returns blank
+                if not standalone_question.strip() or len(standalone_question) > 300:
+                    standalone_question = query
+            else:
+                standalone_question = query
+
+            retrieved_docs = retriever.invoke(standalone_question)
+            context_text = "\n\n".join([doc.page_content for doc in retrieved_docs])
+            
+            qa_prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are an AI assistant. Answer the question using ONLY the provided context:\n\n{context}"),
+                MessagesPlaceholder("chat_history"),
+                ("human", "{input}"),
+            ])
+            
+            qa_chain = qa_prompt | self.llm | StrOutputParser()
+            
+            answer = qa_chain.invoke({
+                "input": standalone_question, 
+                "chat_history": chat_history, 
+                "context": context_text
+            })
+
+            sources = [f"Page {doc.metadata.get('page', 0) + 1}" for doc in retrieved_docs]
+            
+            return answer, list(set(sources))
+
+        except Exception as e:
+            st.error(f"🚨 GOOGLE CHAT API ERROR DETAILS: {str(e)}")
+            raise e
