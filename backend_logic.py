@@ -14,27 +14,26 @@ class RAGBackend:
     def __init__(self, file_path: str):
         self.file_path = file_path
         
-        # Pull key from secrets
-        api_key = st.secrets["GOOGLE_API_KEY"]
+        # 1. SET THE KEY AS AN ENVIRONMENT VARIABLE (The "Magic" Fix)
+        # This allows the underlying Google SDK to find the key automatically
+        os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
         
         unique_id = str(uuid.uuid4())[:8]
         self.persist_directory = f"./chroma_db_{unique_id}"
         
-        # 1. Use STABLE Embeddings with explicit task_type
-        # 'retrieval_document' is required by Google for indexing RAG data
+        # 2. Initialize models WITHOUT passing the key explicitly
+        # The SDK will now pull it from os.environ
         self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004", # Latest stable 2026 version
-            google_api_key=api_key,
+            model="models/text-embedding-004",
             task_type="retrieval_document" 
         )
         
-        # 2. Use STABLE LLM
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
-            temperature=0.3,
-            google_api_key=api_key
+            temperature=0.3
         )
         self.vector_store = None
+        
     def process_document(self):
         """Loads PDF and chunks text with a safety-first batching approach."""
         if os.path.exists(self.persist_directory):
