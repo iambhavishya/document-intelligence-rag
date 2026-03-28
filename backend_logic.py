@@ -70,45 +70,50 @@ class RAGBackend:
 
     def get_response(self, query: str, chat_history: list):
         """Processes the user query and retrieves answers from the PDF."""
-        
-        if not self.vector_store:
-            self.vector_store = Chroma(
-                persist_directory=self.persist_directory, 
-                embedding_function=self.embeddings
-            )
+        try:
+            if not self.vector_store:
+                self.vector_store = Chroma(
+                    persist_directory=self.persist_directory, 
+                    embedding_function=self.embeddings
+                )
 
-        retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
+            retriever = self.vector_store.as_retriever(search_kwargs={"k": 3})
 
-        # --- Contextualization Step ---
-        context_prompt = ChatPromptTemplate.from_messages([
-            ("system", "Given chat history and a question, rephrase it as a standalone question. Do NOT answer it."),
-            MessagesPlaceholder("chat_history"),
-            ("human", "{input}"),
-        ])
-        
-        context_chain = context_prompt | self.llm | StrOutputParser()
-        standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
+            # --- Contextualization Step ---
+            context_prompt = ChatPromptTemplate.from_messages([
+                ("system", "Given chat history and a question, rephrase it as a standalone question. Do NOT answer it."),
+                MessagesPlaceholder("chat_history"),
+                ("human", "{input}"),
+            ])
+            
+            context_chain = context_prompt | self.llm | StrOutputParser()
+            standalone_question = context_chain.invoke({"input": query, "chat_history": chat_history})
 
-        # --- Retrieval Step ---
-        retrieved_docs = retriever.invoke(standalone_question)
-        context_text = "\n\n".join([doc.page_content for doc in retrieved_docs])
-        
-        # --- Answer Generation Step ---
-        qa_prompt = ChatPromptTemplate.from_messages([
-            ("system", "You are an AI assistant. Answer the question using ONLY the provided context:\n\n{context}"),
-            MessagesPlaceholder("chat_history"),
-            ("human", "{input}"),
-        ])
-        
-        qa_chain = qa_prompt | self.llm | StrOutputParser()
-        
-        answer = qa_chain.invoke({
-            "input": standalone_question, 
-            "chat_history": chat_history, 
-            "context": context_text
-        })
+            # --- Retrieval Step ---
+            retrieved_docs = retriever.invoke(standalone_question)
+            context_text = "\n\n".join([doc.page_content for doc in retrieved_docs])
+            
+            # --- Answer Generation Step ---
+            qa_prompt = ChatPromptTemplate.from_messages([
+                ("system", "You are an AI assistant. Answer the question using ONLY the provided context:\n\n{context}"),
+                MessagesPlaceholder("chat_history"),
+                ("human", "{input}"),
+            ])
+            
+            qa_chain = qa_prompt | self.llm | StrOutputParser()
+            
+            answer = qa_chain.invoke({
+                "input": standalone_question, 
+                "chat_history": chat_history, 
+                "context": context_text
+            })
 
-        # --- Citation Extraction ---
-        sources = [f"Page {doc.metadata.get('page', 0) + 1}" for doc in retrieved_docs]
-        
-        return answer, list(set(sources))
+            # --- Citation Extraction ---
+            sources = [f"Page {doc.metadata.get('page', 0) + 1}" for doc in retrieved_docs]
+            
+            return answer, list(set(sources))
+
+        except Exception as e:
+            # THIS WILL PRINT THE EXACT REASON GOOGLE REJECTED THE CHAT
+            st.error(f"🚨 GOOGLE CHAT API ERROR DETAILS: {str(e)}")
+            raise e
