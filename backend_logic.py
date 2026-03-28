@@ -27,7 +27,7 @@ class RAGBackend:
             task_type="retrieval_document" 
         )
         
-        self.llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.3)
+        self.llm = ChatGoogleGenerativeAI(model="gemini-pro", temperature=0.3)
         self.vector_store = None
 
     def process_document(self):
