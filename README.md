@@ -1,4 +1,4 @@
-```markdown
+
 # 📄 Document Intelligence RAG
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge.svg)](https://document-intelligence-rag-anyc5cpkunzhzctycvf4nf.streamlit.app/)
